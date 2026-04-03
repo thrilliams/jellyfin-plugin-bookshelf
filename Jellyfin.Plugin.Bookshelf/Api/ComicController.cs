@@ -58,22 +58,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
     [Authorize]
     public IActionResult GetPageCount([FromRoute, Required] Guid itemId, [FromQuery] Guid? userId)
     {
-        var user = userId.IsNullOrEmpty()
-            ? null
-            : _userManager.GetUserById(userId.Value);
-        var item = _libraryManager.GetItemById<BaseItem>(itemId, user);
-        if (item is null)
-        {
-            return NotFound();
-        }
-
-        var extension = Path.GetExtension(item.Path);
-        if (!_comicBookExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
-        {
-            return NotFound();
-        }
-
-        using var archive = OpenCbz(item.Path);
+        using var archive = OpenCbz(itemId, userId);
         if (archive is null)
         {
             return NotFound();
@@ -97,22 +82,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
     [Authorize]
     public async Task<IActionResult> GetPage([FromRoute, Required] Guid itemId, [FromRoute, Required] int pageIndex, [FromQuery] Guid? userId)
     {
-        var user = userId.IsNullOrEmpty()
-            ? null
-            : _userManager.GetUserById(userId.Value);
-        var item = _libraryManager.GetItemById<BaseItem>(itemId, user);
-        if (item is null)
-        {
-            return NotFound();
-        }
-
-        var extension = Path.GetExtension(item.Path);
-        if (!_comicBookExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
-        {
-            return NotFound();
-        }
-
-        using var archive = OpenCbz(item.Path);
+        using var archive = OpenCbz(itemId, userId);
         if (archive is null)
         {
             return NotFound();
@@ -132,11 +102,26 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
         return File(memoryStream, contentType);
     }
 
-    private static IArchive? OpenCbz(string path)
+    private IArchive? OpenCbz(Guid itemId, Guid? userId)
     {
+        var user = userId.IsNullOrEmpty()
+            ? null
+            : _userManager.GetUserById(userId.Value);
+        var item = _libraryManager.GetItemById<BaseItem>(itemId, user);
+        if (item is null)
+        {
+            return null;
+        }
+
+        var extension = Path.GetExtension(item.Path);
+        if (!_comicBookExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
         try
         {
-            var fileStream = System.IO.File.OpenRead(path);
+            var fileStream = System.IO.File.OpenRead(item.Path);
             return ArchiveFactory.Open(fileStream);
         }
         catch
