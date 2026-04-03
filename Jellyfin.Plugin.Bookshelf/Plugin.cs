@@ -25,10 +25,10 @@ namespace Jellyfin.Plugin.Bookshelf
         }
 
         /// <inheritdoc />
-        public override string Name => "Bookshelf";
+        public override string Name => "Seahawk/Bookshelf";
 
         /// <inheritdoc />
-        public override Guid Id => Guid.Parse("9c4e63f1-031b-4f25-988b-4f7d78a8b53e");
+        public override Guid Id => Guid.Parse("4CBB9F7B-59F6-4925-BB9F-692EDC1A7E52");
 
         /// <summary>
         /// Gets the current plugin instance.
@@ -38,14 +38,14 @@ namespace Jellyfin.Plugin.Bookshelf
         /// <inheritdoc />
         public IEnumerable<PluginPageInfo> GetPages()
         {
-            return new[]
-            {
+            return
+            [
                 new PluginPageInfo
                 {
                     Name = Name,
                     EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html"
                 }
-            };
+            ];
         }
     }
 }
