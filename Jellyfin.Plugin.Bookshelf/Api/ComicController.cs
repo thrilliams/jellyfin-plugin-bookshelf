@@ -14,6 +14,7 @@ using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using SharpCompress.Archives;
 
 namespace Jellyfin.Plugin.Bookshelf.Api;
@@ -28,12 +29,17 @@ namespace Jellyfin.Plugin.Bookshelf.Api;
 /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
 [ApiController]
 [Route("")]
-public class ComicController(ILibraryManager libraryManager, IUserManager userManager) : ControllerBase
+public class ComicController(ILibraryManager libraryManager, IUserManager userManager) : ControllerBase, IDisposable
 {
+    private const int ArchiveExpirySeconds = 60;
+    private readonly MemoryCache _archiveCache = new(new MemoryCacheOptions());
+
     private readonly ILibraryManager _libraryManager = libraryManager;
     private readonly IUserManager _userManager = userManager;
     private readonly string[] _comicBookExtensions = [".cb7", ".cbr", ".cbt", ".cbz"];
     private readonly string[] _pageExtensions = [".png", ".jpeg", ".jpg", ".webp", ".bmp", ".gif"];
+
+    private bool _disposed;
 
     /// <summary>
     /// Returns a sensible value when the plugin is loaded.
@@ -58,22 +64,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
     [Authorize]
     public IActionResult GetPageCount([FromRoute, Required] Guid itemId, [FromQuery] Guid? userId)
     {
-        var user = userId.IsNullOrEmpty()
-            ? null
-            : _userManager.GetUserById(userId.Value);
-        var item = _libraryManager.GetItemById<BaseItem>(itemId, user);
-        if (item is null)
-        {
-            return NotFound();
-        }
-
-        var extension = Path.GetExtension(item.Path);
-        if (!_comicBookExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
-        {
-            return NotFound();
-        }
-
-        using var archive = OpenCbz(item.Path);
+        using var archive = OpenCbz(itemId, userId);
         if (archive is null)
         {
             return NotFound();
@@ -97,22 +88,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
     [Authorize]
     public async Task<IActionResult> GetPage([FromRoute, Required] Guid itemId, [FromRoute, Required] int pageIndex, [FromQuery] Guid? userId)
     {
-        var user = userId.IsNullOrEmpty()
-            ? null
-            : _userManager.GetUserById(userId.Value);
-        var item = _libraryManager.GetItemById<BaseItem>(itemId, user);
-        if (item is null)
-        {
-            return NotFound();
-        }
-
-        var extension = Path.GetExtension(item.Path);
-        if (!_comicBookExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
-        {
-            return NotFound();
-        }
-
-        using var archive = OpenCbz(item.Path);
+        using var archive = OpenCbz(itemId, userId);
         if (archive is null)
         {
             return NotFound();
@@ -132,12 +108,54 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
         return File(memoryStream, contentType);
     }
 
-    private static IArchive? OpenCbz(string path)
+    private static void PostEvictionCallback(object key, object? value, EvictionReason reason, object? state)
     {
+        if (value is IArchive archive)
+        {
+            archive.Dispose();
+        }
+    }
+
+    private IArchive CacheArchive(Guid itemId, IArchive archive)
+    {
+        var options = new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = new TimeSpan(0, 0, ArchiveExpirySeconds)
+        };
+
+        options.RegisterPostEvictionCallback(PostEvictionCallback);
+
+        return _archiveCache.Set(itemId, archive, new TimeSpan(0, 0, 60));
+    }
+
+    private IArchive? OpenCbz(Guid itemId, Guid? userId)
+    {
+        var user = userId.IsNullOrEmpty()
+            ? null
+            : _userManager.GetUserById(userId.Value);
+        var item = _libraryManager.GetItemById<BaseItem>(itemId, user);
+        if (item is null)
+        {
+            return null;
+        }
+
+        var archive = _archiveCache.Get<IArchive>(itemId);
+        if (archive is not null)
+        {
+            return CacheArchive(itemId, archive);
+        }
+
+        var extension = Path.GetExtension(item.Path);
+        if (!_comicBookExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
         try
         {
-            var fileStream = System.IO.File.OpenRead(path);
-            return ArchiveFactory.Open(fileStream);
+            var fileStream = System.IO.File.OpenRead(item.Path);
+            archive = ArchiveFactory.Open(fileStream);
+            return CacheArchive(itemId, archive);
         }
         catch
         {
@@ -162,4 +180,32 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
         ".svg" => "image/svg+xml",
         _ => throw new ArgumentException($"Unsupported extension: {extension}"),
     };
+
+    /// <summary>
+    /// Disposes of resources.
+    /// </summary>
+    /// <param name="disposing">Whether or not called from the Dispose() method.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
+        {
+            _archiveCache.Dispose();
+        }
+
+        _disposed = true;
+    }
+
+    /// <summary>
+    /// Dispose of resources.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
 }
