@@ -112,6 +112,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
     {
         if (value is IArchive archive)
         {
+            Plugin.LogArchiveCacheHit((Guid)key);
             archive.Dispose();
         }
     }
@@ -142,6 +143,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
         var archive = _archiveCache.Get<IArchive>(itemId);
         if (archive is not null)
         {
+            Plugin.LogArchiveCacheHit(itemId);
             return CacheArchive(itemId, archive);
         }
 
