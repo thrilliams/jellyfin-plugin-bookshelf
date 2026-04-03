@@ -112,7 +112,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
     {
         if (value is IArchive archive)
         {
-            Plugin.LogArchiveCacheHit((Guid)key);
+            Plugin.Log($"Archive has been evicted from cache for {key}");
             archive.Dispose();
         }
     }
@@ -143,7 +143,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
         var archive = _archiveCache.Get<IArchive>(itemId);
         if (archive is not null)
         {
-            Plugin.LogArchiveCacheHit(itemId);
+            Plugin.Log($"Archive has been read from cache for {itemId}");
             return CacheArchive(itemId, archive);
         }
 

@@ -85,17 +85,5 @@ namespace Jellyfin.Plugin.Bookshelf
 
             instance._logger.LogInformation("{Message}", message);
         }
-
-        /// <summary>
-        /// Logs a message noting that an archive file has been read from the cache.
-        /// </summary>
-        /// <param name="itemId">The ID of the item the archive corresponds to.</param>
-        public static void LogArchiveCacheHit(Guid itemId) => Log($"Archive has been read from cache for {itemId}");
-
-        /// <summary>
-        /// Logs a message noting that an archive file has been evicted from the cache.
-        /// </summary>
-        /// <param name="itemId">The ID of the item the archive corresponds to.</param>
-        public static void LogArchiveCacheEviction(Guid itemId) => Log($"Archive has been evicted from cache for {itemId}");
     }
 }
