@@ -94,8 +94,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
             return NotFound();
         }
 
-        var memoryStream = new MemoryStream();
-        await page.OpenEntryStream().CopyToAsync(memoryStream).ConfigureAwait(false);
+        var memoryStream = await page.OpenEntryStreamAsync().ConfigureAwait(false);
         memoryStream.Position = 0;
 
         var contentType = GetContentType(Path.GetExtension(page.Key ?? string.Empty));
@@ -122,7 +121,7 @@ public class ComicController(ILibraryManager libraryManager, IUserManager userMa
         try
         {
             var fileStream = System.IO.File.OpenRead(item.Path);
-            return ArchiveFactory.Open(fileStream);
+            return ArchiveFactory.OpenArchive(fileStream);
         }
         catch
         {

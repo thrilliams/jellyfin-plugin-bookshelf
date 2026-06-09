@@ -72,34 +72,30 @@ namespace Jellyfin.Plugin.Bookshelf.Providers
         /// <param name="item">Item to load a cover for.</param>
         private async Task<DynamicImageResponse> LoadCover(BaseItem item)
         {
-            // The image will be loaded into memory, create stream
-            var memoryStream = new MemoryStream();
             try
             {
                 ImageFormat imageFormat;
                 // Open the .cbz
                 // This should return a valid reference or throw
                 using (Stream stream = File.OpenRead(item.Path))
-                using (var archive = ArchiveFactory.Open(stream))
+                using (var archive = ArchiveFactory.OpenArchive(stream))
                 {
                     // If no cover is found, throw exception to log results
                     IArchiveEntry cover;
                     (cover, imageFormat) = FindCoverEntryInArchive(archive) ?? throw new InvalidOperationException("No supported cover found");
 
                     // Copy our cover to memory stream
-                    await cover.OpenEntryStream().CopyToAsync(memoryStream).ConfigureAwait(false);
+                    var memoryStream = await cover.OpenEntryStreamAsync().ConfigureAwait(false);
+                    memoryStream.Position = 0;
+
+                    // Return the response
+                    return new DynamicImageResponse
+                    {
+                        HasImage = true,
+                        Stream = memoryStream,
+                        Format = imageFormat,
+                    };
                 }
-
-                // Reset stream position after copying
-                memoryStream.Position = 0;
-
-                // Return the response
-                return new DynamicImageResponse
-                {
-                    HasImage = true,
-                    Stream = memoryStream,
-                    Format = imageFormat,
-                };
             }
             catch (Exception e)
             {
